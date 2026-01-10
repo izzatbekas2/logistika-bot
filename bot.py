@@ -1,112 +1,145 @@
-import os
-import re
-import logging
 import asyncio
-
+import logging
 from aiogram import Bot, Dispatcher, types
 from aiogram.filters import CommandStart
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.storage.memory import MemoryStorage
+from aiogram.types import ReplyKeyboardMarkup, KeyboardButton
+
+# ===================== CONFIG =====================
+BOT_TOKEN = "BU_YERGA_BOT_TOKENINGNI_QOY"
+GROUP_ID = -4701543857  # guruh ID (minus bilan!)
+# ==================================================
 
 logging.basicConfig(level=logging.INFO)
 
-TOKEN = os.environ.get("BOT_TOKEN")
-GROUP_ID_RAW = os.environ.get("GROUP_ID")
-
-if not TOKEN:
-    raise RuntimeError("BOT_TOKEN env variable is missing (Railway Settings -> Variables)")
-if not GROUP_ID_RAW:
-    raise RuntimeError("GROUP_ID env variable is missing (Railway Settings -> Variables)")
-
-GROUP_ID = int(GROUP_ID_RAW)
-
-REGIONS = [
-    "Toshkent shahri", "Toshkent", "Andijon", "Buxoro", "Farg‘ona", "Jizzax",
-    "Namangan", "Navoiy", "Qashqadaryo", "Samarqand", "Sirdaryo", "Surxondaryo",
-    "Xorazm", "Qoraqalpog‘iston",
-]
-
-class Form(StatesGroup):
-    order_no = State()
-    phone = State()
-    region = State()
-    amount = State()
-    name = State()
-
-bot = Bot(token=TOKEN)
+bot = Bot(token=BOT_TOKEN)
 dp = Dispatcher(storage=MemoryStorage())
 
-def region_keyboard() -> types.ReplyKeyboardMarkup:
-    rows, row = [], []
-    for i, r in enumerate(REGIONS, start=1):
-        row.append(types.KeyboardButton(text=r))
-        if i % 2 == 0:
-            rows.append(row); row = []
+# ======== 12 viloyat + Toshkent shahar ========
+REGIONS = [
+    "Andijon", "Buxoro", "Farg‘ona", "Jizzax", "Xorazm",
+    "Namangan", "Navoiy", "Qashqadaryo", "Samarqand",
+    "Sirdaryo", "Surxondaryo", "Toshkent viloyati",
+    "Toshkent shahri"
+]
+
+def regions_keyboard():
+    rows = []
+    row = []
+    for r in REGIONS:
+        row.append(KeyboardButton(text=r))
+        if len(row) == 2:
+            rows.append(row)
+            row = []
     if row:
         rows.append(row)
-    return types.ReplyKeyboardMarkup(keyboard=rows, resize_keyboard=True)
+    rows.append([KeyboardButton(text="🔄 Qaytadan boshlash")])
+    return ReplyKeyboardMarkup(keyboard=rows, resize_keyboard=True)
 
-def clean_phone(text: str) -> str:
-    digits = re.sub(r"\D", "", text)
-    if digits.startswith("998") and len(digits) == 12:
-        return f"+{digits}"
-    if len(digits) == 9:
-        return f"+998{digits}"
-    return text.strip()
+def start_keyboard():
+    return ReplyKeyboardMarkup(
+        keyboard=[
+            [KeyboardButton(text="📝 Ma’lumot yuborish")],
+        ],
+        resize_keyboard=True
+    )
 
-def clean_amount(text: str) -> str:
-    digits = re.sub(r"\D", "", text)
-    return digits if digits else text.strip()
+class Form(StatesGroup):
+    fullname = State()
+    phone = State()
+    region = State()
+    comment = State()
 
 @dp.message(CommandStart())
-async def start(message: types.Message, state: FSMContext):
+async def cmd_start(message: types.Message, state: FSMContext):
     await state.clear()
-    await message.answer("1) Buyurtma raqamini kiriting (masalan: 74):")
-    await state.set_state(Form.order_no)
+    await message.answer(
+        "Assalomu alaykum! 👋\n\n"
+        "📝 Ma’lumot yuborish uchun pastdagi tugmani bosing.",
+        reply_markup=start_keyboard()
+    )
 
-@dp.message(Form.order_no)
-async def step_order(message: types.Message, state: FSMContext):
-    await state.update_data(order_no=message.text.strip())
-    await message.answer("2) Telefon raqamini kiriting (masalan: +998901234567):")
+@dp.message(lambda m: m.text == "🔄 Qaytadan boshlash")
+async def restart(message: types.Message, state: FSMContext):
+    await state.clear()
+    await message.answer(
+        "🔄 Qaytadan boshlandi.\n\n📝 Ma’lumot yuborish tugmasini bosing.",
+        reply_markup=start_keyboard()
+    )
+
+@dp.message(lambda m: m.text == "📝 Ma’lumot yuborish")
+async def begin_form(message: types.Message, state: FSMContext):
+    await state.clear()
+    await state.set_state(Form.fullname)
+    await message.answer("1) Ism familiyangizni yozing:", reply_markup=types.ReplyKeyboardRemove())
+
+@dp.message(Form.fullname)
+async def get_fullname(message: types.Message, state: FSMContext):
+    text = (message.text or "").strip()
+    if len(text) < 3:
+        return await message.answer("❌ Ism familiya juda qisqa. Qayta yozing:")
+    await state.update_data(fullname=text)
     await state.set_state(Form.phone)
+    await message.answer("2) Telefon raqam (masalan: +998901234567):")
 
 @dp.message(Form.phone)
-async def step_phone(message: types.Message, state: FSMContext):
-    await state.update_data(phone=clean_phone(message.text))
-    await message.answer("3) Viloyatni tanlang:", reply_markup=region_keyboard())
+async def get_phone(message: types.Message, state: FSMContext):
+    phone = (message.text or "").strip().replace(" ", "")
+    # oddiy tekshiruv
+    if not (phone.startswith("+998") and len(phone) in (13, 14)):
+        return await message.answer("❌ Telefon formati noto‘g‘ri.\nMasalan: +998901234567\nQayta kiriting:")
+    await state.update_data(phone=phone)
     await state.set_state(Form.region)
+    await message.answer("3) Viloyatingizni tanlang:", reply_markup=regions_keyboard())
 
 @dp.message(Form.region)
-async def step_region(message: types.Message, state: FSMContext):
-    region = message.text.strip()
+async def get_region(message: types.Message, state: FSMContext):
+    region = (message.text or "").strip()
+
+    if region == "🔄 Qaytadan boshlash":
+        await state.clear()
+        return await message.answer(
+            "🔄 Qaytadan boshlandi.\n📝 Ma’lumot yuborish tugmasini bosing.",
+            reply_markup=start_keyboard()
+        )
+
     if region not in REGIONS:
-        await message.answer("Tugmadan tanlang 👇", reply_markup=region_keyboard())
-        return
+        return await message.answer("❌ Ro‘yxatdan tanlang:", reply_markup=regions_keyboard())
+
     await state.update_data(region=region)
-    await message.answer("4) Summani kiriting (masalan: 650000):", reply_markup=types.ReplyKeyboardRemove())
-    await state.set_state(Form.amount)
+    await state.set_state(Form.comment)
+    await message.answer("4) Qo‘shimcha izoh (agar yo‘q bo‘lsa: '-' yozing):", reply_markup=types.ReplyKeyboardRemove())
 
-@dp.message(Form.amount)
-async def step_amount(message: types.Message, state: FSMContext):
-    await state.update_data(amount=clean_amount(message.text))
-    await message.answer("5) Mutaxasis ismini kiriting (masalan: abdulloh):")
-    await state.set_state(Form.name)
+@dp.message(Form.comment)
+async def finish_form(message: types.Message, state: FSMContext):
+    comment = (message.text or "").strip()
+    if not comment:
+        comment = "-"
 
-@dp.message(Form.name)
-async def step_name(message: types.Message, state: FSMContext):
-    name = message.text.strip()
     data = await state.get_data()
-    order_no = data.get("order_no", "")
-    phone = data.get("phone", "")
-    region = data.get("region", "")
-    amount = data.get("amount", "")
+    fullname = data.get("fullname", "-")
+    phone = data.get("phone", "-")
+    region = data.get("region", "-")
 
-    msg = f"{order_no} - {phone} {region.lower()} yetkazildi tavsiya bering {amount} {name}"
-    await bot.send_message(GROUP_ID, msg)
+    text_to_group = (
+        "📌 Yangi ma’lumot keldi\n\n"
+        f"👤 Ism: {fullname}\n"
+        f"📞 Telefon: {phone}\n"
+        f"🗺 Viloyat: {region}\n"
+        f"📝 Izoh: {comment}\n"
+    )
 
-    await message.answer("✅ Yuborildi!\nYana /start bosing.")
+    try:
+        await bot.send_message(GROUP_ID, text_to_group)
+        await message.answer("✅ Ma’lumot yuborildi!", reply_markup=start_keyboard())
+    except Exception as e:
+        await message.answer(f"❌ Guruhga yuborishda xatolik: {e}\n\nToken/ID yoki bot guruhda admin emas bo‘lishi mumkin.")
+
+    # avtomatik startga qaytadi
     await state.clear()
+    await message.answer("Yana ma’lumot yuborasizmi?", reply_markup=start_keyboard())
 
 async def main():
     await dp.start_polling(bot)
