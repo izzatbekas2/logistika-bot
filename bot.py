@@ -8,7 +8,7 @@ from aiogram.fsm.storage.memory import MemoryStorage
 from aiogram.types import ReplyKeyboardMarkup, KeyboardButton
 
 # ===================== CONFIG =====================
-BOT_TOKEN = "BU_YERGA_BOT_TOKENINGNI_QOY"
+BOT_TOKEN = "8540209675:AAE67zygIFoymAZq4D8bpT9z5RgttxnbC9o"
 GROUP_ID = -4701543857  # guruh ID (minus bilan!)
 # ==================================================
 
@@ -146,3 +146,4 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
+
