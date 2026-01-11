@@ -15,7 +15,7 @@ from aiogram.fsm.storage.memory import MemoryStorage
 
 # ================== SOZLAMALAR ==================
 TOKEN = "8540209675:AAE67zygIFoymAZq4D8bpT9z5RgttxnbC9o"
-GROUP_ID = -4701543857  # ishlamasa: -1004701543857 qilib ko'ring
+GROUP_ID = -1002299149883  # ishlamasa: -1004701543857 qilib ko'ring
 # =================================================
 
 logging.basicConfig(level=logging.INFO)
@@ -103,4 +103,5 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
+
 
