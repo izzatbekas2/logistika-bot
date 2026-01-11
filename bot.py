@@ -16,6 +16,8 @@ from aiogram.fsm.storage.memory import MemoryStorage
 # ================== SOZLAMALAR ==================
 TOKEN = "8540209675:AAE67zygIFoymAZq4D8bpT9z5RgttxnbC9o"
 GROUP_ID = -1002299149883  # ishlamasa: -1004701543857 qilib ko'ring
+
+OWNER_ID = 6019499412 # <-- BU YERGA O'ZINGIZNI TELEGRAM USER ID NI YOZING
 # =================================================
 
 logging.basicConfig(level=logging.INFO)
@@ -41,40 +43,65 @@ REGIONS_KB = ReplyKeyboardMarkup(
 )
 
 
+def is_owner(message: Message) -> bool:
+    return message.from_user is not None and message.from_user.id == OWNER_ID
+
+
 async def main():
     bot = Bot(token=TOKEN)
     dp = Dispatcher(storage=MemoryStorage())
 
     @dp.message(CommandStart())
     async def start(message: Message, state: FSMContext):
+        if not is_owner(message):
+            await message.answer("⛔ Bu bot faqat egasi uchun. Ruxsat yo‘q.")
+            return
+
         await state.clear()
         await message.answer("📦 Buyurtma raqamini kiriting:")
         await state.set_state(Order.number)
 
     @dp.message(Order.number)
     async def step_number(message: Message, state: FSMContext):
+        if not is_owner(message):
+            await message.answer("⛔ Ruxsat yo‘q.")
+            return
+
         await state.update_data(number=message.text.strip())
         await message.answer("📞 Telefon raqamni kiriting:")
         await state.set_state(Order.phone)
 
     @dp.message(Order.phone)
     async def step_phone(message: Message, state: FSMContext):
+        if not is_owner(message):
+            await message.answer("⛔ Ruxsat yo‘q.")
+            return
+
         await state.update_data(phone=message.text.strip())
         await message.answer("📍 Viloyatni tanlang:", reply_markup=REGIONS_KB)
         await state.set_state(Order.region)
 
     @dp.message(Order.region)
     async def step_region(message: Message, state: FSMContext):
+        if not is_owner(message):
+            await message.answer("⛔ Ruxsat yo‘q.")
+            return
+
         await state.update_data(region=message.text.strip())
         await message.answer("💰 Summani kiriting (faqat raqam):", reply_markup=ReplyKeyboardRemove())
         await state.set_state(Order.amount)
 
     @dp.message(Order.amount)
     async def step_amount(message: Message, state: FSMContext):
+        if not is_owner(message):
+            await message.answer("⛔ Ruxsat yo‘q.")
+            return
+
         raw = message.text.strip().replace(" ", "")
         if not raw.isdigit():
             await message.answer("❌ Faqat raqam kiriting. Masalan: 1450000")
             return
+
         amount = "{:,}".format(int(raw)).replace(",", " ")
         await state.update_data(amount=amount)
         await message.answer("👤 Mutaxasis ismini kiriting:")
@@ -82,6 +109,10 @@ async def main():
 
     @dp.message(Order.name)
     async def finish(message: Message, state: FSMContext):
+        if not is_owner(message):
+            await message.answer("⛔ Ruxsat yo‘q.")
+            return
+
         data = await state.get_data()
         name = message.text.strip()
 
@@ -103,5 +134,3 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
-
-
